@@ -83,10 +83,10 @@ class PerformanceMemory:
                 "provider_success_rate": None,
             }
         successes = sum(1 for o in filtered if o.provider_success)
-        task_successes = sum(1 for o in filtered if o.task_success)
+        execution_groups = _group_by_execution(filtered)
+        task_successes = sum(1 for group in execution_groups if any(o.task_success for o in group))
         contributions = sum(1 for o in filtered if o.contributed_to_final)
         verification_attempts = [o for o in filtered if o.verification_passed is not None]
-        distinct_executions = {o.execution_id for o in filtered if o.execution_id}
         failure_breakdown: dict[str, int] = {}
         for observation in filtered:
             if not observation.provider_success:
@@ -97,9 +97,9 @@ class PerformanceMemory:
             "provider_success_rate": round(successes / total, 6),
             "provider_success_count": successes,
             "provider_failure_count": total - successes,
-            "task_success_rate": round(task_successes / total, 6),
+            "task_success_rate": round(task_successes / len(execution_groups), 6),
             "task_success_count": task_successes,
-            "execution_sample_size": len(distinct_executions) if distinct_executions else total,
+            "execution_sample_size": len(execution_groups),
             "contribution_rate": round(contributions / total, 6),
             "contribution_count": contributions,
             "average_latency_ms": _avg([o.latency_ms for o in filtered if o.latency_ms is not None]),
@@ -108,7 +108,7 @@ class PerformanceMemory:
             "average_tool_calls": round(sum(o.tool_calls for o in filtered) / total, 4),
             "average_recovery_attempts": round(sum(o.recovery_attempts for o in filtered) / total, 4),
             "verification_success_rate": round(sum(1 for o in verification_attempts if o.verification_passed) / len(verification_attempts), 6) if verification_attempts else None,
-            "verified_success_rate": round(sum(1 for o in verification_attempts if o.verification_passed and o.task_success) / len(verification_attempts), 6) if verification_attempts else None,
+            "verified_success_rate": _verified_success_rate(execution_groups),
             "failure_breakdown": failure_breakdown,
         }
 
@@ -153,6 +153,10 @@ def _dict_to_observation(data: dict[str, Any]) -> PerformanceObservation:
         input_tokens=_to_int_optional(data.get("input_tokens")),
         output_tokens=_to_int_optional(data.get("output_tokens")),
         final_outcome=data.get("final_outcome"),
+        accepted_model_id=data.get("accepted_model_id"),
+        fallback_used=bool(data.get("fallback_used", False)),
+        attempt_index=_to_int_optional(data.get("attempt_index")),
+        role=data.get("role"),
     )
 
 
@@ -161,6 +165,27 @@ def _avg(values: list[float]) -> float | None:
     if not values:
         return None
     return round(sum(values) / len(values), 4)
+
+
+def _group_by_execution(observations: list[PerformanceObservation]) -> list[list[PerformanceObservation]]:
+    """Group records without treating model calls as independent tasks."""
+    groups: dict[str, list[PerformanceObservation]] = {}
+    for index, observation in enumerate(observations):
+        key = observation.execution_id or f"record:{index}"
+        groups.setdefault(key, []).append(observation)
+    return list(groups.values())
+
+
+def _verified_success_rate(groups: list[list[PerformanceObservation]]) -> float | None:
+    verified_groups = [group for group in groups if any(o.verification_passed is not None for o in group)]
+    if not verified_groups:
+        return None
+    successful = sum(
+        1
+        for group in verified_groups
+        if any(o.verification_passed is True for o in group) and any(o.task_success for o in group)
+    )
+    return round(successful / len(verified_groups), 6)
 
 
 def _to_bool_optional(value: Any) -> bool | None:

@@ -48,6 +48,10 @@ class PerformanceObservation:
     input_tokens: int | None = None
     output_tokens: int | None = None
     final_outcome: str | None = None
+    accepted_model_id: str | None = None
+    fallback_used: bool = False
+    attempt_index: int | None = None
+    role: str | None = None
 
     @property
     def success(self) -> bool:
@@ -94,6 +98,10 @@ class PerformanceObservation:
             "output_tokens": self.output_tokens,
             "estimated_cost": self.cost,
             "final_outcome": self.final_outcome,
+            "accepted_model_id": self.accepted_model_id,
+            "fallback_used": self.fallback_used,
+            "attempt_index": self.attempt_index,
+            "role": self.role,
             # Integration-contract names, preserved verbatim.
             "provider_success": self.provider_success,
             "contributed_to_final": self.contributed_to_final,

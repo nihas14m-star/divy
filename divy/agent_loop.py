@@ -67,13 +67,14 @@ class AgentSession:
         system_instructions: str,
         response_schema: dict[str, Any] | None = None,
         verifier: Callable[[dict[str, Any]], EvaluationResult] | None = None,
+        verification_required: bool = False,
+        context: list[dict[str, Any]] | None = None,
     ) -> AgentSessionResult:
         started = time.perf_counter()
         execution_id = str(uuid.uuid4())
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_instructions},
-            {"role": "user", "content": goal},
-        ]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_instructions}]
+        messages.extend(context or [])
+        messages.append({"role": "user", "content": goal})
         trajectory: dict[str, Any] = {
             "execution_id": execution_id,
             "task_id": task_id,
@@ -123,7 +124,8 @@ class AgentSession:
                 self._record(trajectory, {"event": "model_response", "iteration": iteration, "status": "success", "latency_ms": elapsed, "cost": estimated_cost, "token_usage": response.token_usage or {}, "response_type": "structured", "content": response.content})
             except Exception as exc:
                 elapsed = round((time.perf_counter() - call_started) * 1000, 3)
-                error = {"type": type(exc).__name__, "message": str(exc)}
+                failure_type = exc.kind if isinstance(exc, ProviderError) else ("invalid_response" if isinstance(exc, ValueError) else "provider_error")
+                error = {"type": failure_type, "message": "provider call failed"}
                 self._record(trajectory, {"event": "model_response", "iteration": iteration, "status": "failed", "latency_ms": elapsed, "cost": estimated_cost, "token_usage": {}, "response_type": "error", "error": error})
                 if (
                     isinstance(exc, ProviderError)
@@ -155,7 +157,7 @@ class AgentSession:
                 self._record(trajectory, {"event": "final_candidate", "output": final_output})
                 if verifier is None:
                     trajectory["verification_result"] = None
-                    trajectory["status"] = "success"
+                    trajectory["status"] = "failed_unverified" if verification_required else "success"
                     break
                 evaluation = verifier(trajectory)
                 trajectory["verification_result"] = evaluation.verification_passed
@@ -301,5 +303,9 @@ class AgentSession:
                     input_tokens=usage.get("input_tokens"),
                     output_tokens=usage.get("output_tokens"),
                     final_outcome=trajectory["status"],
+                    accepted_model_id=self.provider.model_id if contributed else None,
+                    fallback_used=False,
+                    attempt_index=i + 1,
+                    role="agent",
                 )
             )

@@ -44,6 +44,19 @@ for local development and QA notes.
 - JSONL trajectory logging and JSON benchmark summaries.
 - A deterministic scripted adapter used only to prove the harness end to end.
 
+## What DIVY is — and is not
+
+DIVY is an orchestration and model-performance intelligence layer. It decides
+which registered model or model sequence is feasible for a task, executes
+through the controlled adapter/tool boundary, verifies the result, recovers or
+falls back when justified, and records evidence for later routing.
+
+It is **not** an autonomous coding agent, IDE copilot, deployment system, or
+general-purpose shell agent. The underlying task may be coding, research,
+analysis, structured generation, data transformation, or another
+model-compatible workload, but DIVY owns coordination rather than pretending
+to be the worker itself.
+
 ## Architecture
 
 ```text
@@ -112,6 +125,53 @@ task → routing decision → model selection → tool execution → verificatio
 
 The benchmark commands use deterministic test doubles. They validate
 orchestration and measurement mechanics, not model intelligence.
+
+## Minimal orchestration API
+
+Applications can use the unified `divy.orchestrate` entry point rather than
+manually coordinating routing and execution. The structured path needs no
+credentials when paired with a deterministic adapter:
+
+```python
+from divy import orchestrate
+from divy.providers import ModelMetadata, ModelProvider, ModelRegistry
+from divy.routing import TaskProfile
+from divy.schemas import ModelResponse
+
+
+class LocalAdapter:
+    def generate(self, messages, tools, response_schema):
+        return ModelResponse({"answer": "deterministic result"})
+
+
+registry = ModelRegistry([
+    ModelProvider(
+        ModelMetadata(
+            "local-model", "local", frozenset({"analysis"}),
+            4096, 0.0, 1.0, 1.0,
+        ),
+        LocalAdapter(),
+    )
+])
+
+outcome = orchestrate(
+    "Summarize the supplied task.",
+    task_id="example-1",
+    registry=registry,
+    requirements=TaskProfile(
+        task_type="analysis",
+        required_capabilities=frozenset({"analysis"}),
+    ),
+)
+print(outcome.success, outcome.accepted_model_id)
+print(outcome.explanation)
+```
+
+Pass a `ToolRegistry` to use the bounded model-to-tool loop. Add a verifier
+callback and set `TaskProfile(verification_required=True)` for verification-
+required work; the API fails closed as `failed_unverified` when no verifier is
+available. `OrchestrationOutcome.as_dict()` preserves the route explanation,
+accepted model, execution/session metadata, and fallback attribution.
 
 ## License status
 
@@ -423,7 +483,8 @@ RW06 dynamic (bolt failed → lightning succeeded).
 
 ## Capability-aware routing
 
-Capability matching happens before execution through `ModelRegistry.candidates`.
+Capability matching happens before execution through the registry's structured
+eligibility checks.
 The live RW01 request requires `coding` and `structured_output`. A vision task
 would additionally require `vision`; a model without that capability is not a
 candidate. If no candidate matches, routing returns a structured failure rather

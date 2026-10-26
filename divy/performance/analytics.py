@@ -186,11 +186,10 @@ def aggregate(observations: list[PerformanceObservation]) -> dict[str, Any]:
         return stats
 
     successes = [o for o in observations if o.provider_success]
-    task_successes = [o for o in observations if o.task_success]
+    execution_groups = _group_by_execution(observations)
     failures = [o for o in observations if not o.provider_success]
     verified = [o for o in observations if o.verification_passed]
     verification_attempts = [o for o in observations if o.verification_passed is not None]
-    distinct_executions = {o.execution_id for o in observations if o.execution_id}
 
     recovered = [o for o in observations if o.recovery_attempts > 0]
     recovered_successes = [o for o in recovered if o.provider_success]
@@ -206,9 +205,9 @@ def aggregate(observations: list[PerformanceObservation]) -> dict[str, Any]:
     stats["failure_count"] = len(failures)
     stats["success_rate"] = round(len(successes) / total, 6)
     stats["failure_rate"] = round(len(failures) / total, 6)
-    stats["task_success_count"] = len(task_successes)
-    stats["task_success_rate"] = round(len(task_successes) / total, 6)
-    stats["execution_sample_size"] = len(distinct_executions) if distinct_executions else total
+    stats["task_success_count"] = sum(1 for group in execution_groups if any(o.task_success for o in group))
+    stats["task_success_rate"] = round(stats["task_success_count"] / len(execution_groups), 6)
+    stats["execution_sample_size"] = len(execution_groups)
 
     stats["verification_attempted_count"] = len(verification_attempts)
     stats["verification_success_rate"] = (
@@ -216,9 +215,10 @@ def aggregate(observations: list[PerformanceObservation]) -> dict[str, Any]:
         if stats["verification_attempted_count"]
         else None
     )
+    verified_groups = [group for group in execution_groups if any(o.verification_passed is not None for o in group)]
     stats["verified_success_rate"] = (
-        round(sum(1 for o in verification_attempts if o.verification_passed and o.task_success) / len(verification_attempts), 6)
-        if verification_attempts else None
+        round(sum(1 for group in verified_groups if any(o.verification_passed is True for o in group) and any(o.task_success for o in group)) / len(verified_groups), 6)
+        if verified_groups else None
     )
 
     stats["recovery_attempt_count"] = len(recovered)
@@ -246,6 +246,14 @@ def aggregate(observations: list[PerformanceObservation]) -> dict[str, Any]:
     stats["failure_breakdown"] = failure_breakdown
 
     return stats
+
+
+def _group_by_execution(observations: list[PerformanceObservation]) -> list[list[PerformanceObservation]]:
+    groups: dict[str, list[PerformanceObservation]] = {}
+    for index, observation in enumerate(observations):
+        key = observation.execution_id or f"record:{index}"
+        groups.setdefault(key, []).append(observation)
+    return list(groups.values())
 
 
 def _median(values: list[float]) -> float:

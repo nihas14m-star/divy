@@ -12,13 +12,14 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from .logger import EventLogger
+from .adapters import ProviderError
 from .performance import PerformanceMemory, PerformanceObservation
 from .providers import ModelProvider, ModelRegistry
 from .routing import RoutingDecision
-from .schemas import ModelResponse
+from .schemas import EvaluationResult, ModelResponse
 
 
 @dataclass
@@ -90,6 +91,7 @@ class MultiModelExecutor:
         tool_calls: int = 0,
         recovery_attempts: int = 0,
         max_cost: float | None = None,
+        result_verifier: Callable[[dict[str, Any]], EvaluationResult] | None = None,
     ) -> OrchestrationResult:
         calls: list[ModelCallRecord] = []
         started = time.perf_counter()
@@ -162,8 +164,18 @@ class MultiModelExecutor:
 
         def verify_candidate(candidate: ModelCallRecord) -> bool:
             nonlocal verification_attempted, verification_passed, spent_cost
-            if not verify or not decision.verifier_model_id:
+            if not verify:
                 return True
+            if result_verifier is not None:
+                verification_attempted = True
+                try:
+                    verification_passed = bool(result_verifier(candidate.output or {}).success)
+                except Exception:
+                    verification_passed = False
+                return verification_passed
+            if not decision.verifier_model_id:
+                verification_passed = False
+                return False
             verification_messages = messages + [{"role": "user", "content": {"candidate": candidate.output, "instruction": "Independently verify this candidate."}}]
             estimate = self.registry.get(decision.verifier_model_id).cost()
             if max_cost is not None and (estimate is None or spent_cost + estimate > max_cost):
@@ -176,7 +188,7 @@ class MultiModelExecutor:
             verification_passed = verification.status == "success" and (verification.output or {}).get("verified") is True
             return verification_passed
 
-        if verification_candidates and verify and decision.verifier_model_id:
+        if verification_candidates and verify and (decision.verifier_model_id or result_verifier is not None):
             accepted = next((candidate for candidate in verification_candidates if verify_candidate(candidate)), None)
             if accepted is not None:
                 final_output = accepted.output
@@ -213,9 +225,12 @@ class MultiModelExecutor:
                 decision.task_id,
                 required_capabilities or set(),
                 verification_passed,
+                verification_attempted,
+                result_verifier is not None,
                 tool_calls,
                 recovery_attempts,
                 execution_id,
+                accepted_model_id,
             )
         self._log({"event": "orchestration_complete", "task_id": decision.task_id, "success": success, "fallback_used": fallback_used, "verification_passed": verification_passed, "disagreement": disagreement})
         return OrchestrationResult(
@@ -240,15 +255,20 @@ class MultiModelExecutor:
         task_id: str,
         capabilities: set[str],
         verification_passed: bool,
+        verification_attempted: bool,
+        local_verifier: bool,
         tool_calls: int,
         recovery_attempts: int,
         execution_id: str,
+        accepted_model_id: str | None,
     ) -> None:
         assert self.performance_memory is not None
         timestamp = datetime.now(timezone.utc).isoformat()
+        attempt_index = 0
         for call in calls:
             if call.status == "skipped":
                 continue
+            attempt_index += 1
             token_count = call.token_usage.get("total_tokens")
             if token_count is None and call.token_usage:
                 token_count = sum(value for key, value in call.token_usage.items() if key in {"input_tokens", "output_tokens", "prompt_tokens", "completion_tokens"})
@@ -266,7 +286,11 @@ class MultiModelExecutor:
                     provider_success=call.status == "success",
                     contributed_to_final=contributed,
                     task_success=task_success and contributed,
-                    verification_passed=verification_passed if call.role == "verifier" else None,
+                    verification_passed=(
+                        (verification_passed if call.model_id == accepted_model_id else False)
+                        if verification_attempted and local_verifier and call.role in {"primary", "fallback"}
+                        else (verification_passed if verification_attempted and call.role == "verifier" else None)
+                    ),
                     latency_ms=call.latency_ms,
                     cost=call.cost,
                     token_count=token_count,
@@ -274,8 +298,20 @@ class MultiModelExecutor:
                     output_tokens=call.token_usage.get("output_tokens"),
                     tool_calls=tool_calls,
                     recovery_attempts=recovery_attempts,
-                    failure_type=(call.error or {}).get("type"),
-                    final_outcome="success" if contributed else ("provider_failure" if call.status != "success" else "not_selected"),
+                    failure_type=(call.error or {}).get("type") or (
+                        "verification_failure"
+                        if verification_attempted and call.status == "success" and call.role in {"primary", "fallback"} and not contributed
+                        else None
+                    ),
+                    final_outcome="success" if contributed else (
+                        "provider_failure" if call.status != "success" else (
+                            "verification_failure" if verification_attempted and call.role in {"primary", "fallback"} else "not_selected"
+                        )
+                    ),
+                    accepted_model_id=accepted_model_id,
+                    fallback_used=call.role == "fallback",
+                    attempt_index=attempt_index,
+                    role=call.role,
                 )
             )
 
@@ -316,7 +352,8 @@ class MultiModelExecutor:
             record = ModelCallRecord(model_id, role, "success", elapsed, provider.cost(), response.token_usage or {}, response.content)
         except Exception as exc:  # provider failures are data for routing/recovery
             elapsed = round((time.perf_counter() - started) * 1000, 3)
-            record = ModelCallRecord(model_id, role, "failed", elapsed, provider.cost(), error={"type": type(exc).__name__, "message": str(exc)})
+            failure_type = exc.kind if isinstance(exc, ProviderError) else ("invalid_response" if isinstance(exc, ValueError) else "provider_error")
+            record = ModelCallRecord(model_id, role, "failed", elapsed, provider.cost(), error={"type": failure_type, "message": "provider call failed"})
         self._log({"event": "model_result", "model_id": model_id, "role": role, "status": record.status, "latency_ms": record.latency_ms, "error": record.error})
         return record
 

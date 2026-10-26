@@ -33,11 +33,14 @@ type EvidenceMode = 'raw' | 'derived'
 
 const pipeline = [
   { label: 'Task', icon: Sparkles },
-  { label: 'Registry', icon: Network },
+  { label: 'Profile', icon: CircleDot },
+  { label: 'Feasibility', icon: LockKeyhole },
+  { label: 'Evidence', icon: Database },
   { label: 'Routing', icon: GitBranch },
-  { label: 'Agent Session', icon: Workflow },
+  { label: 'Execution', icon: Workflow },
   { label: 'Tools', icon: Terminal },
   { label: 'Verify', icon: ShieldCheck },
+  { label: 'Fallback', icon: TriangleAlert },
   { label: 'Memory', icon: Database },
   { label: 'Evaluate', icon: Check },
 ]
@@ -106,7 +109,7 @@ function App() {
               <button className="button button-quiet" onClick={() => scrollToId('system')}>Explore architecture <ChevronRight size={16} /></button>
             </div>
             <div className="hero-meta">
-              <span><Check size={14} /> 186 tests passing</span>
+              <span><Check size={14} /> 191 tests passing</span>
               <span><CircleDot size={14} /> provider-neutral core</span>
               <span><LockKeyhole size={14} /> hosted unsafe tools fail closed</span>
             </div>
@@ -150,7 +153,7 @@ function App() {
                   </div>
                 })}
               </div>
-              <div className="architecture-foot"><span>raw trajectory</span><span>→</span><span>independent evidence</span><span>→</span><span>future routing input</span></div>
+               <div className="architecture-foot"><span>task profile</span><span>→</span><span>feasible candidates</span><span>→</span><span>verified outcome</span><span>→</span><span>future routing evidence</span></div>
             </div>
             <div className="tabbed-explainer">
               <div className="tab-controls" role="tablist" aria-label="System views">
@@ -214,7 +217,7 @@ function App() {
           <div className="container">
             <SectionIntro index="06" kicker="EXPERIMENTS / RESULTS" title={<>Evidence before<br /><span>enthusiasm.</span></>} copy="The validated baseline measures orchestration mechanics and controlled routing behavior. It does not prove model intelligence or dynamic-routing superiority." />
             <div className="result-stat-grid">
-              <ResultStat value="186/186" label="repository tests" />
+              <ResultStat value="191/191" label="repository tests" />
               <ResultStat value="20/20" label="B benchmarks" />
               <ResultStat value="10/10" label="O benchmarks" />
               <ResultStat value="10/10" label="P benchmarks" />
