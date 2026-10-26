@@ -106,7 +106,7 @@ function App() {
               <button className="button button-quiet" onClick={() => scrollToId('system')}>Explore architecture <ChevronRight size={16} /></button>
             </div>
             <div className="hero-meta">
-              <span><Check size={14} /> 179 tests passing</span>
+              <span><Check size={14} /> 186 tests passing</span>
               <span><CircleDot size={14} /> provider-neutral core</span>
               <span><LockKeyhole size={14} /> hosted unsafe tools fail closed</span>
             </div>
@@ -138,7 +138,7 @@ function App() {
 
         <section className="section system-section" id="system">
           <div className="container">
-            <SectionIntro index="02" kicker="THE SYSTEM" title={<>A control loop built<br /><span>to be inspected.</span></>} copy="Every handoff has a contract. Every side effect crosses a registered tool. Every final claim is checked against the workspace, not the model's confidence." />
+            <SectionIntro index="02" kicker="THE SYSTEM" title={<>A control loop built<br /><span>to be inspected.</span></>} copy="Every task becomes a provider-neutral profile before routing: capabilities, context, tools, risk, latency, and verification requirements. Every handoff has a contract. Every final claim is checked against evidence, not the model's confidence." />
             <div className="architecture-panel">
               <div className="panel-topline"><span>DIVY / ORCHESTRATION GRAPH</span><span className="panel-live"><span className="pulse-dot" /> LOCAL / DETERMINISTIC</span></div>
               <div className="pipeline-grid">
@@ -166,7 +166,7 @@ function App() {
         </section>
 
         <section className="section routing-section container" id="routing">
-          <SectionIntro index="03" kicker="ROUTING" title={<>Route on capability.<br /><span>Learn from outcomes.</span></>} copy="The current router is transparent by design. It combines static metadata with empirical evidence, but does not claim to be optimal." />
+          <SectionIntro index="03" kicker="ROUTING" title={<>Route on capability.<br /><span>Learn from outcomes.</span></>} copy="The router filters for feasibility first, then combines static metadata with historical evidence, including verified outcomes where available. It can coordinate primary, fallback, verifier, and synthesis roles, but does not claim to be optimal." />
           <div className="routing-layout">
             <div className="routing-visual">
               <div className="visual-label">CAPABLE CANDIDATES / TASK: SOFTWARE_ENGINEERING</div>
@@ -214,7 +214,7 @@ function App() {
           <div className="container">
             <SectionIntro index="06" kicker="EXPERIMENTS / RESULTS" title={<>Evidence before<br /><span>enthusiasm.</span></>} copy="The validated baseline measures orchestration mechanics and controlled routing behavior. It does not prove model intelligence or dynamic-routing superiority." />
             <div className="result-stat-grid">
-              <ResultStat value="179/179" label="repository tests" />
+              <ResultStat value="186/186" label="repository tests" />
               <ResultStat value="20/20" label="B benchmarks" />
               <ResultStat value="10/10" label="O benchmarks" />
               <ResultStat value="10/10" label="P benchmarks" />

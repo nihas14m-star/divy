@@ -168,6 +168,9 @@ def aggregate(observations: list[PerformanceObservation]) -> dict[str, Any]:
             {
                 "success_rate": None,
                 "failure_rate": None,
+                "task_success_rate": None,
+                "verified_success_rate": None,
+                "execution_sample_size": 0,
                 "verification_success_rate": None,
                 "recovery_success_rate": None,
                 "average_latency_ms": None,
@@ -183,8 +186,11 @@ def aggregate(observations: list[PerformanceObservation]) -> dict[str, Any]:
         return stats
 
     successes = [o for o in observations if o.provider_success]
+    task_successes = [o for o in observations if o.task_success]
     failures = [o for o in observations if not o.provider_success]
     verified = [o for o in observations if o.verification_passed]
+    verification_attempts = [o for o in observations if o.verification_passed is not None]
+    distinct_executions = {o.execution_id for o in observations if o.execution_id}
 
     recovered = [o for o in observations if o.recovery_attempts > 0]
     recovered_successes = [o for o in recovered if o.provider_success]
@@ -200,14 +206,19 @@ def aggregate(observations: list[PerformanceObservation]) -> dict[str, Any]:
     stats["failure_count"] = len(failures)
     stats["success_rate"] = round(len(successes) / total, 6)
     stats["failure_rate"] = round(len(failures) / total, 6)
+    stats["task_success_count"] = len(task_successes)
+    stats["task_success_rate"] = round(len(task_successes) / total, 6)
+    stats["execution_sample_size"] = len(distinct_executions) if distinct_executions else total
 
-    stats["verification_attempted_count"] = sum(
-        1 for o in observations if o.verification_passed is not None
-    )
+    stats["verification_attempted_count"] = len(verification_attempts)
     stats["verification_success_rate"] = (
         round(len(verified) / stats["verification_attempted_count"], 6)
         if stats["verification_attempted_count"]
         else None
+    )
+    stats["verified_success_rate"] = (
+        round(sum(1 for o in verification_attempts if o.verification_passed and o.task_success) / len(verification_attempts), 6)
+        if verification_attempts else None
     )
 
     stats["recovery_attempt_count"] = len(recovered)
@@ -263,7 +274,7 @@ def _parse_timestamp(value: str | None) -> datetime | None:
 def _decay_weight(age_days: float, half_life_days: float) -> float:
     if half_life_days <= 0:
         return 1.0
-    return math.exp(-max(0.0, age_days) / half_life_days)
+    return math.exp(-math.log(2) * max(0.0, age_days) / half_life_days)
 
 
 def recency_weighted_aggregate(
@@ -279,7 +290,8 @@ def recency_weighted_aggregate(
     are not modified.
 
     Returns a dict mirroring :func:`aggregate` plus:
-      * ``weighted_sample_size`` — sum of decay weights (effective count)
+      * ``weighted_sample_size`` — sum of decay weights
+      * ``effective_sample_size`` — Kish effective sample size
       * ``weighted_success_rate`` — decay-weighted success rate
       * ``half_life_days`` — the decay half-life used
     """
@@ -346,6 +358,7 @@ def recency_weighted_aggregate(
 
     weight_sum = sum(weights)
     stats["weighted_sample_size"] = round(weight_sum, 6)
+    stats["effective_sample_size"] = round((weight_sum * weight_sum) / sum(weight * weight for weight in weights), 6) if weight_sum else 0.0
     stats["weighted_success_rate"] = (
         round(weighted_success / weight_sum, 6) if weight_sum else None
     )

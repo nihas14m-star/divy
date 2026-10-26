@@ -83,12 +83,23 @@ class PerformanceMemory:
                 "provider_success_rate": None,
             }
         successes = sum(1 for o in filtered if o.provider_success)
+        task_successes = sum(1 for o in filtered if o.task_success)
         contributions = sum(1 for o in filtered if o.contributed_to_final)
+        verification_attempts = [o for o in filtered if o.verification_passed is not None]
+        distinct_executions = {o.execution_id for o in filtered if o.execution_id}
+        failure_breakdown: dict[str, int] = {}
+        for observation in filtered:
+            if not observation.provider_success:
+                key = observation.failure_type or "unknown"
+                failure_breakdown[key] = failure_breakdown.get(key, 0) + 1
         return {
             "observation_count": total,
             "provider_success_rate": round(successes / total, 6),
             "provider_success_count": successes,
             "provider_failure_count": total - successes,
+            "task_success_rate": round(task_successes / total, 6),
+            "task_success_count": task_successes,
+            "execution_sample_size": len(distinct_executions) if distinct_executions else total,
             "contribution_rate": round(contributions / total, 6),
             "contribution_count": contributions,
             "average_latency_ms": _avg([o.latency_ms for o in filtered if o.latency_ms is not None]),
@@ -96,6 +107,9 @@ class PerformanceMemory:
             "average_token_count": _avg([o.token_count for o in filtered if o.token_count is not None]),
             "average_tool_calls": round(sum(o.tool_calls for o in filtered) / total, 4),
             "average_recovery_attempts": round(sum(o.recovery_attempts for o in filtered) / total, 4),
+            "verification_success_rate": round(sum(1 for o in verification_attempts if o.verification_passed) / len(verification_attempts), 6) if verification_attempts else None,
+            "verified_success_rate": round(sum(1 for o in verification_attempts if o.verification_passed and o.task_success) / len(verification_attempts), 6) if verification_attempts else None,
+            "failure_breakdown": failure_breakdown,
         }
 
     def count(self) -> int:

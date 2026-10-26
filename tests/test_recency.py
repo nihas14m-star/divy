@@ -54,8 +54,9 @@ class RecencyTests(unittest.TestCase):
         weighted = recency_weighted_aggregate(obs, half_life_days=1.0)
         self.assertIsNotNone(weighted["weighted_success_rate"])
         self.assertLess(weighted["weighted_success_rate"], raw)
-        # The recent failure should dominate: expected e^-1 / (1 + e^-1) ~ 0.269
-        self.assertAlmostEqual(weighted["weighted_success_rate"], 0.2689, places=3)
+        # The recent failure should dominate. A true half-life gives an old
+        # observation weight 0.5, so the rate is 1 / 3.
+        self.assertAlmostEqual(weighted["weighted_success_rate"], 1 / 3, places=3)
 
     def test_anchored_to_most_recent_is_deterministic(self):
         obs = [
@@ -80,6 +81,12 @@ class RecencyTests(unittest.TestCase):
         s_long = recency_weighted_aggregate(obs, half_life_days=100.0, reference_time="2026-01-02T00:00:00+00:00")
         # Shorter half-life decays the 1-day-old observation more.
         self.assertLess(s_short["weighted_sample_size"], s_long["weighted_sample_size"])
+
+    def test_half_life_means_half_weight(self):
+        obs = [_obs("m", True, "2026-01-01T00:00:00+00:00")]
+        stats = recency_weighted_aggregate(obs, half_life_days=1.0, reference_time="2026-01-02T00:00:00+00:00")
+        self.assertAlmostEqual(stats["weighted_sample_size"], 0.5, places=6)
+        self.assertAlmostEqual(stats["effective_sample_size"], 1.0, places=6)
 
     def test_analytics_recency_method(self):
         mem = PerformanceMemory()

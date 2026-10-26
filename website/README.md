@@ -27,7 +27,7 @@ The production build is emitted to `dist/` and is ignored by Git.
 - `npm run build` succeeds.
 - The page was opened in a local Chromium session and visually checked across the hero, architecture, routing, evidence, evaluation, results, security, future-work, and footer sections.
 - Architecture tabs, raw/derived evidence switching, in-page navigation, and the reproduction-command copy control were exercised.
-- The DIVY engineering repository test suite passes with `179 passed`.
+- The DIVY engineering repository test suite passes with `186 passed`.
 
 ## Content boundaries
 

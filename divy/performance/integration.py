@@ -26,6 +26,10 @@ class HistoricalEvidence:
     cost_per_successful_task: float | None
     verification_success_rate: float | None
     recovery_success_rate: float | None
+    task_success_rate: float | None = None
+    verified_success_rate: float | None = None
+    execution_sample_size: int = 0
+    failure_breakdown: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,10 @@ class PerformanceInterface:
             cost_per_successful_task=stats.get("cost_per_successful_task"),
             verification_success_rate=stats.get("verification_success_rate"),
             recovery_success_rate=stats.get("recovery_success_rate"),
+            task_success_rate=stats.get("task_success_rate"),
+            verified_success_rate=stats.get("verified_success_rate"),
+            execution_sample_size=stats.get("execution_sample_size", 0),
+            failure_breakdown=stats.get("failure_breakdown", {}),
         )
 
     # --- task / capability evidence -------------------------------------
@@ -126,6 +134,10 @@ class PerformanceInterface:
                     cost_per_successful_task=m["cost_per_successful_task"],
                     verification_success_rate=m["verification_success_rate"],
                     recovery_success_rate=m["recovery_success_rate"],
+                    task_success_rate=m.get("task_success_rate"),
+                    verified_success_rate=m.get("verified_success_rate"),
+                    execution_sample_size=m.get("execution_sample_size", r.sample_size),
+                    failure_breakdown=m.get("failure_breakdown", {}),
                 )
             )
         note = f"{len(candidates)}/{len(models)} models met min_samples={min_samples}"

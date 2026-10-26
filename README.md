@@ -61,6 +61,30 @@ User Task
     → Future Routing Evidence
 ```
 
+## Evidence-aware routing layer
+
+The routing boundary is provider-neutral and now separates task understanding
+from model ranking. A `TaskProfile` captures inferred task type, required
+capabilities, context and response requirements, tool/modality needs,
+latency sensitivity, verification requirements, risk, and expected difficulty.
+The registry applies those requirements as hard feasibility checks before the
+policy scores candidates.
+
+The deterministic policy combines static metadata with historical evidence,
+including task-success rate, provider failures, verification outcomes,
+latency/cost observations, failure categories, sample size, and optional
+recency weighting. Scores use stable model-id tie-breaking, and every decision
+contains a structured explanation with eligible and rejected candidates,
+evidence counts, score, selected models, fallbacks, and verifier choice.
+Unknown cost or latency never becomes a fabricated number; a hard budget or
+latency requirement rejects an incompatible or unknown candidate.
+
+When independent verification rejects a provider-successful candidate, the
+multi-model executor can continue through the bounded fallback list and verify
+each alternate candidate. The accepted model is recorded separately from the
+initial selection, so fallback outcomes remain attributable. The existing
+hosted `test.run` process-isolation boundary remains fail-closed.
+
 ## Install and run
 
 From the repository root, using Python 3.11 or newer:

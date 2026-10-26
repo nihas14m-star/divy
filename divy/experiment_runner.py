@@ -140,6 +140,7 @@ class ExperimentRunner:
                 recency_half_life_days=30.0,
                 recency_weight=0.3,
                 exploration_rate=0.1,
+                seed=config.seed,
             )
             decision = policy.route(req, registry_for_routing)
 

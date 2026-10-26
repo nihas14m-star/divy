@@ -181,6 +181,25 @@ class FinalAuditTests(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertFalse(any(o.contributed_to_final for o in memory.observations()))
 
+    def test_verification_failure_triggers_verified_fallback(self):
+        primary = Responses(ModelResponse({"answer": "weak candidate"}))
+        fallback = Responses(ModelResponse({"answer": "verified candidate"}))
+        verifier = Responses(ModelResponse({"verified": False}), ModelResponse({"verified": True}))
+        registry = ModelRegistry([
+            provider(primary, "primary"),
+            provider(fallback, "fallback"),
+            provider(verifier, "verifier"),
+        ])
+        result = MultiModelExecutor(registry).execute(
+            RoutingDecision("audit", ["primary"], fallback_model_ids=["fallback"], verifier_model_id="verifier"),
+            [], [], {}, verify=True,
+        )
+        self.assertTrue(result.success)
+        self.assertTrue(result.fallback_used)
+        self.assertEqual(result.accepted_model_id, "fallback")
+        self.assertEqual(result.final_output, {"answer": "verified candidate"})
+        self.assertEqual(verifier.calls, 2)
+
     def test_reusing_trial_identity_cannot_overwrite_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:
             runner = CampaignRunner(directory, live=False)

@@ -44,6 +44,7 @@ class OrchestrationResult:
     disagreement: bool = False
     rationale: str = ""
     wall_latency_ms: float = 0.0
+    accepted_model_id: str | None = None
 
     @property
     def model_calls(self) -> int:
@@ -140,6 +141,7 @@ class MultiModelExecutor:
         disagreement = len({self._stable_output(record.output) for record in successful}) > 1
         final_output = successful[0].output if successful else None
 
+        synthesis: ModelCallRecord | None = None
         if synthesize and successful and decision.synthesis_model_id:
             candidates = [record.output for record in successful if record.output is not None]
             synthesis_messages = messages + [{"role": "user", "content": {"candidates": candidates, "instruction": "Synthesize the best supported result."}}]
@@ -155,16 +157,51 @@ class MultiModelExecutor:
 
         verification_attempted = False
         verification_passed = False
-        if verify and final_output is not None and decision.verifier_model_id:
-            verification_messages = messages + [{"role": "user", "content": {"candidate": final_output, "instruction": "Independently verify this candidate."}}]
+        verification_candidates = ([synthesis] if synthesis is not None and synthesis.status == "success" else successful) if successful else []
+        accepted_model_id: str | None = verification_candidates[0].model_id if verification_candidates else None
+
+        def verify_candidate(candidate: ModelCallRecord) -> bool:
+            nonlocal verification_attempted, verification_passed, spent_cost
+            if not verify or not decision.verifier_model_id:
+                return True
+            verification_messages = messages + [{"role": "user", "content": {"candidate": candidate.output, "instruction": "Independently verify this candidate."}}]
             estimate = self.registry.get(decision.verifier_model_id).cost()
             if max_cost is not None and (estimate is None or spent_cost + estimate > max_cost):
                 verification = self._skipped_for_cost(decision.verifier_model_id, "verifier")
             else:
                 verification_attempted = True
                 verification = self._call(decision.verifier_model_id, "verifier", verification_messages, tools, {"type": "object", "properties": {"verified": {"type": "boolean"}}})
+                spent_cost += estimate or 0.0
             calls.append(verification)
             verification_passed = verification.status == "success" and (verification.output or {}).get("verified") is True
+            return verification_passed
+
+        if verification_candidates and verify and decision.verifier_model_id:
+            accepted = next((candidate for candidate in verification_candidates if verify_candidate(candidate)), None)
+            if accepted is not None:
+                final_output = accepted.output
+                accepted_model_id = accepted.model_id
+            else:
+                # A provider-successful but unverified result is not accepted.
+                # Try bounded fallbacks and independently verify each candidate.
+                attempted_ids = {candidate.model_id for candidate in verification_candidates}
+                for model_id in decision.fallback_model_ids:
+                    if model_id in attempted_ids:
+                        continue
+                    estimated = self.registry.get(model_id).cost()
+                    if max_cost is not None and (estimated is None or spent_cost + estimated > max_cost):
+                        calls.append(self._skipped_for_cost(model_id, "fallback"))
+                        continue
+                    fallback_record = self._call(model_id, "fallback", messages, tools, response_schema)
+                    calls.append(fallback_record)
+                    if estimated is not None:
+                        spent_cost += estimated
+                    if fallback_record.status == "success":
+                        fallback_used = True
+                        if verify_candidate(fallback_record):
+                            final_output = fallback_record.output
+                            accepted_model_id = fallback_record.model_id
+                            break
 
         success = bool(final_output is not None and (not verify or verification_passed))
         if self.performance_memory is not None:
@@ -191,6 +228,7 @@ class MultiModelExecutor:
             disagreement=disagreement,
             rationale=decision.rationale,
             wall_latency_ms=round((time.perf_counter() - started) * 1000, 3),
+            accepted_model_id=accepted_model_id if success else None,
         )
 
     def _record_performance(
@@ -227,7 +265,7 @@ class MultiModelExecutor:
                     capabilities=tuple(sorted(capabilities)),
                     provider_success=call.status == "success",
                     contributed_to_final=contributed,
-                    task_success=task_success,
+                    task_success=task_success and contributed,
                     verification_passed=verification_passed if call.role == "verifier" else None,
                     latency_ms=call.latency_ms,
                     cost=call.cost,
