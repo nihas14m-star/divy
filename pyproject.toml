@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "divy-ai"
+version = "0.1.0"
+description = "Small, reproducible benchmark harness for DIVY AI orchestration experiments"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["divy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

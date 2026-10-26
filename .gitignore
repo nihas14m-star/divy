@@ -1,0 +1,43 @@
+# Python/build artefacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Keep the published repository focused on the DIVY package. Root-level
+# scratch scripts and the unrelated internship/browser workspace stay local.
+/test_*.py
+/fix_*.py
+/debug_obs.py
+/cdp_connect.py
+/run_continuous.py
+/internship_agent/
+/C:Users*
+/*DIVI_check_*.txt
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+
+# Reproducible generated runs. Public reports are explicitly retained below;
+# raw local/live runs stay out of the published repository.
+/results/demo/
+/results/final_scripted_campaign/
+/results/*
+/results/final_evaluation/*
+!/results/final_evaluation/analysis/
+/results/final_evaluation/analysis/*
+!/results/final_evaluation/analysis/*.md
+/results/control/
+/results/test_*/
+
+# Desktop/debug scratch artefacts kept outside the distributable package
+/applications.db
+/discovery_log_*.json
+/dryrun_*
+/verify_*
+/*.png
+/indeed_*.html
