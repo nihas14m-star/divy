@@ -405,7 +405,7 @@ LIVE_TASKS = {
         goal="Repair src/calculator.py so add(2, 3) returns 5 and verify with the registered test.",
         fixture_name="RW01",
         success_criteria=("calculator add returns 5", "registered test passes"),
-        allowed_tools=("fs.read", "fs.patch", "fs.write", "test.run"),
+        allowed_tools=("fs.read", "fs.patch", "fs.write", "test.run", "calc.evaluate"),
         task_type="software_engineering",
         complexity="moderate",
         required_capabilities=frozenset({"coding", "structured_output"}),
@@ -547,7 +547,7 @@ def verify_task(task_id: str, workspace: SandboxWorkspace, trajectory: dict) -> 
     return verifier(workspace, trajectory)
 
 
-def build_registry(workspace: SandboxWorkspace, task_id: str) -> "ToolRegistry":
+def build_registry(workspace: SandboxWorkspace, task_id: str, *, include_test_run: bool = True) -> "ToolRegistry":
     from divy.tools import CalculatorTool, FilesystemTools, TestRunnerTool, ToolRegistry
     from divy.tools.tests import load_python_module
     from divy.live_tasks import LIVE_TASKS
@@ -572,8 +572,8 @@ def build_registry(workspace: SandboxWorkspace, task_id: str) -> "ToolRegistry":
 
     definitions = fs_defs + calc_defs
 
-    # Add task-specific tests (only if test.run is allowed)
-    if "test.run" in allowed_tools:
+    # Add task-specific tests (only if test.run is allowed and include_test_run is True)
+    if include_test_run and "test.run" in allowed_tools:
         if task_id == "RW01":
             def b04_calculator(ws: SandboxWorkspace) -> dict:
                 try:

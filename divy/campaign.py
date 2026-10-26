@@ -457,7 +457,7 @@ class CampaignRunner:
         with tempfile.TemporaryDirectory(prefix=f"divy-campaign-{config.task_id}-{config.execution_mode}-") as temporary:
             workspace = SandboxWorkspace(Path(temporary))
             setup_fixture(config.task_id, workspace)
-            registry = build_registry(workspace, config.task_id)
+            registry = build_registry(workspace, config.task_id, include_test_run=is_scripted)
 
             destination = self.output_dir / "trials" / f"{config.task_id}_{config.execution_mode}_t{trial_num}"
             # Refuse to mix two executions under one trial identity. Warm
@@ -634,6 +634,17 @@ class CampaignRunner:
                         recoverable_failure=not verified,
                     )
 
+                system_instructions = (
+                    "You are DIVY's bounded agent. Use only registered tools (fs.read, fs.patch, fs.write, calc.evaluate). "
+                    "Return {action:{tool,arguments}} or {final:{message}}. "
+                    "Do NOT attempt to run tests - verification is handled independently after you return a final response. "
+                    "After you have made your changes and verified them by reading the modified file, "
+                    "IMMEDIATELY return a final response with your summary. Do not search for test files or attempt to run tests."
+                ) if not is_scripted else (
+                    "You are DIVY's bounded agent. Use only registered tools. Return {action:{tool,arguments}} or {final:{message}}. "
+                    "After making changes, you MUST run the registered test to verify your fix using the test.run tool with the appropriate test_id."
+                )
+
                 session = AgentSession(
                     attempt_provider,
                     attempt_registry,
@@ -652,7 +663,7 @@ class CampaignRunner:
                     task_id=task.task_id,
                     task_type=task.task_type,
                     capabilities=set(task.required_capabilities),
-                    system_instructions="You are DIVY's bounded agent. Use only registered tools. Return {action:{tool,arguments}} or {final:{message}}. After making changes, you MUST run the registered test to verify your fix using the test.run tool with the appropriate test_id.",
+                    system_instructions=system_instructions,
                     response_schema={"type": "object"},
                     verifier=verifier,
                 )
