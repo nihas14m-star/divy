@@ -12,6 +12,14 @@ The project makes orchestration mechanics observable before any learned router
 is trained. Scripted adapters validate the control loop locally; live providers
 are optional and remain isolated from scripted evidence.
 
+## Website
+
+The rendered project site lives in [`website/`](website/) and presents the
+architecture, routing evidence, benchmark results, security boundary, and
+reproduction path without claiming dynamic-routing superiority. It is built
+with React, TypeScript, and Vite; see [`website/README.md`](website/README.md)
+for local development and QA notes.
+
 ## What is included
 
 - Provider-neutral model adapter interface.
