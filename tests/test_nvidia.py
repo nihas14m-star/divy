@@ -11,6 +11,7 @@ class NvidiaProviderTests(unittest.TestCase):
     def test_catalog_portfolio_is_provider_local_and_unknown_estimates_stay_unknown(self) -> None:
         old = dict(os.environ)
         try:
+            os.environ["DIVY_NVIDIA_API_KEY"] = "test-only-placeholder"
             os.environ.pop("DIVY_NVIDIA_MODEL_ID", None)
             os.environ.pop("NVIDIA_MODEL_ID", None)
             provider = nvidia_provider_from_environment()
@@ -30,6 +31,7 @@ class NvidiaProviderTests(unittest.TestCase):
     def test_model_override_and_portfolio_registry(self) -> None:
         old = dict(os.environ)
         try:
+            os.environ["DIVY_NVIDIA_API_KEY"] = "test-only-placeholder"
             os.environ["DIVY_NVIDIA_MODEL_ID"] = "nvidia/nemotron-3.5-lightning-30b-a3b"
             provider = nvidia_provider_from_environment()
             self.assertEqual(provider.model_id, "nvidia/nemotron-3.5-lightning-30b-a3b")
